@@ -17,6 +17,7 @@
 #include <queue>
 #include <shared_mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "common/config.h"
@@ -38,6 +39,8 @@ struct PrintableBPlusTree;
  * Hint: This class is designed to help you keep track of the pages
  * that you're modifying or accessing.
  */
+
+template <typename KeyType>
 class Context {
  public:
   // When you insert into / remove from the B+ tree, store the write guard of header page here.
@@ -53,6 +56,16 @@ class Context {
   // You may want to use this when getting value, but not necessary.
   std::deque<ReadPageGuard> read_set_;
 
+  bool is_need_change_{false};
+
+  page_id_t up_page_id_;
+
+  KeyType up_key_;
+
+  WritePageGuard need_change_page_;
+
+  IndexPageType change_page_type_{IndexPageType::INVALID_INDEX_PAGE};
+
   auto IsRootPage(page_id_t page_id) -> bool { return page_id == root_page_id_; }
 };
 
@@ -63,6 +76,9 @@ INDEX_TEMPLATE_ARGUMENTS
 class BPlusTree {
   using InternalPage = BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator>;
   using LeafPage = BPlusTreeLeafPage<KeyType, ValueType, KeyComparator>;
+
+  template <typename OtherKeyType, typename OtherValueType, typename OtherKeyComparator>
+  friend class IndexIterator;
 
  public:
   explicit BPlusTree(std::string name, page_id_t header_page_id, BufferPoolManager *buffer_pool_manager,
@@ -129,6 +145,25 @@ class BPlusTree {
    * @return PrintableNode
    */
   auto ToPrintableBPlusTree(page_id_t root_id) -> PrintableBPlusTree;
+
+  // helper function that find key exist in InternalPage/LeafPage or not, if exist return true and store key's index.
+  auto SearchValueOfKey(Context<KeyType> &ctx, page_id_t page_id, const KeyType &key, std::vector<ValueType> *result)
+      -> bool;
+
+  // helper function that find key exist in InternalPage/LeafPage or not, if exist return true and store key's index.
+  auto BinarySearchOfInternalPage(const InternalPage *cur_page, const KeyType &key) -> int;
+
+  // helper function that find key exist in InternalPage/LeafPage or not, if exist return true and store key's index.
+  auto BinarySearchOfLeafPage(const LeafPage *cur_page, const KeyType &key, std::vector<ValueType> *result)
+      -> std::pair<bool, int>;
+
+  auto InsertImpl(Context<KeyType> &ctx, const KeyType &key, const ValueType &value) -> bool;
+
+  auto RemoveImpl(Context<KeyType> &ctx, const KeyType &key) -> bool;
+
+  auto GetFirstLeafPageGuard() -> std::optional<ReadPageGuard>;
+
+  auto GetPageGuardByKey(const KeyType &key) -> std::optional<std::pair<ReadPageGuard, int>>;
 
   // member variable
   std::string index_name_;

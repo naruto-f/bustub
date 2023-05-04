@@ -13,6 +13,7 @@
  * For range scan of b+ tree
  */
 #pragma once
+// #include "storage/index/b_plus_tree.h"  如果include则会出现循环依赖的问题，编译器无法正确解析符号及其依赖。
 #include "storage/page/b_plus_tree_leaf_page.h"
 
 namespace bustub {
@@ -21,10 +22,14 @@ namespace bustub {
 
 INDEX_TEMPLATE_ARGUMENTS
 class IndexIterator {
+  using LeafPage = BPlusTreeLeafPage<KeyType, ValueType, KeyComparator>;
+  // using IndexTree = BPlusTree<KeyType, ValueType, KeyComparator>;
  public:
   // you may define your own constructor based on your member variables
   IndexIterator();
   ~IndexIterator();  // NOLINT
+
+  IndexIterator(BufferPoolManager *bpm, ReadPageGuard guard, int pos);
 
   auto IsEnd() -> bool;
 
@@ -32,12 +37,29 @@ class IndexIterator {
 
   auto operator++() -> IndexIterator &;
 
-  auto operator==(const IndexIterator &itr) const -> bool { throw std::runtime_error("unimplemented"); }
+  auto operator==(const IndexIterator &itr) const -> bool {
+    if (is_valid_ != itr.is_valid_) {
+      return false;
+    }
 
-  auto operator!=(const IndexIterator &itr) const -> bool { throw std::runtime_error("unimplemented"); }
+    if (!is_valid_) {
+      return true;
+    }
+
+    return cur_leaf_page_ == itr.cur_leaf_page_ && cur_pos_ == itr.cur_pos_;
+  }
+
+  auto operator!=(const IndexIterator &itr) const -> bool { return !operator==(itr); }
 
  private:
   // add your own private member variables here
+  // IndexTree *tree_{nullptr};
+  BufferPoolManager *bpm_{nullptr};
+  ReadPageGuard guard_;
+  const LeafPage *cur_leaf_page_{nullptr};
+  int cur_pos_{0};
+  MappingType cur_pair_{};
+  bool is_valid_{false};
 };
 
 }  // namespace bustub
