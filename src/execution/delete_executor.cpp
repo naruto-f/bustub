@@ -21,7 +21,8 @@ DeleteExecutor::DeleteExecutor(ExecutorContext *exec_ctx, const DeletePlanNode *
     : AbstractExecutor(exec_ctx),
       plan_(plan),
       table_info_(exec_ctx_->GetCatalog()->GetTable(exec_ctx_->GetCatalog()->GetTable(plan_->table_oid_)->name_)),
-      child_executor_(std::move(child_executor)) {}
+      child_executor_(std::move(child_executor)),
+      txn_(exec_ctx_->GetTransaction()) {}
 
 void DeleteExecutor::Init() {
   // throw NotImplementedException("DeleteExecutor is not implemented");
@@ -35,7 +36,7 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
     flag_ = true;
     TupleMeta meta;
     meta.is_deleted_ = true;
-    meta.delete_txn_id_ = INVALID_TXN_ID;
+    meta.delete_txn_id_ = txn_->GetTransactionId();
     meta.insert_txn_id_ = INVALID_TXN_ID;
     table_info_->table_->UpdateTupleMeta(meta, *rid);
     for (auto *index_info : index_infos_) {
@@ -46,6 +47,10 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
       index_info->index_->DeleteEntry(tuple->KeyFromTuple(table_info_->schema_, index_info->key_schema_, key_attrs),
                                       *rid, nullptr);
     }
+    TableWriteRecord write_record{plan_->table_oid_, *rid,
+                                  exec_ctx_->GetCatalog()->GetTable(plan_->table_oid_)->table_.get()};
+    write_record.wtype_ = WType::DELETE;
+    txn_->AppendTableWriteRecord(write_record);
     ++count;
   }
 

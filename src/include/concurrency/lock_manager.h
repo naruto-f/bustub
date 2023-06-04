@@ -17,6 +17,7 @@
 #include <list>
 #include <memory>
 #include <mutex>  // NOLINT
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -72,6 +73,13 @@ class LockManager {
     txn_id_t upgrading_ = INVALID_TXN_ID;
     /** coordination */
     std::mutex latch_;
+
+    txn_id_t need_abort_ = INVALID_TXN_ID;
+    bool is_abort_{false};
+    std::unordered_map<txn_id_t, LockRequest *> locked_requests_;
+
+    std::condition_variable all_recv_cv_;
+    int wait_request_nums_{0};
   };
 
   /**
@@ -309,19 +317,31 @@ class LockManager {
 
   TransactionManager *txn_manager_;
 
+  struct WaitPairHashFunction {
+    auto operator()(const std::pair<txn_id_t, txn_id_t> &x) const -> size_t { return x.first ^ x.second; }
+  };
+
  private:
   /** Spring 2023 */
   /* You are allowed to modify all functions below. */
-  auto UpgradeLockTable(Transaction *txn, LockMode lock_mode, const table_oid_t &oid) -> bool;
-  auto UpgradeLockRow(Transaction *txn, LockMode lock_mode, const table_oid_t &oid, const RID &rid) -> bool;
+  auto UpgradeLockTable(Transaction *txn, LockMode lock_mode, LockManager::LockMode new_lock_mode,
+                        const LockRequestQueue *qu, const table_oid_t &oid) -> bool;
+  auto UpgradeLockRow(Transaction *txn, LockMode lock_mode, LockManager::LockMode new_lock_mode, const table_oid_t &oid,
+                      const RID &rid, const LockRequestQueue *qu) -> bool;
+
   auto AreLocksCompatible(LockMode l1, LockMode l2) -> bool;
+  auto CheckLocksCompatible(Transaction *txn, LockMode l1, LockMode l2) -> void;
+  auto IsCompatible(LockMode l1, std::unordered_map<txn_id_t, LockRequest *> &locked_reqs) -> bool;
   auto CanTxnTakeLock(Transaction *txn, LockMode lock_mode) -> bool;
   void GrantNewLocksIfPossible(LockRequestQueue *lock_request_queue);
   auto CanLockUpgrade(LockMode curr_lock_mode, LockMode requested_lock_mode) -> bool;
   auto CheckAppropriateLockOnTable(Transaction *txn, const table_oid_t &oid, LockMode row_lock_mode) -> bool;
-  auto FindCycle(txn_id_t source_txn, std::vector<txn_id_t> &path, std::unordered_set<txn_id_t> &on_path,
-                 std::unordered_set<txn_id_t> &visited, txn_id_t *abort_txn_id) -> bool;
+  auto FindCycle(txn_id_t source_txn, std::unordered_set<txn_id_t> &on_path,
+                 std::unordered_map<txn_id_t, Transaction *> &txns,
+                 std::unordered_set<std::pair<txn_id_t, txn_id_t>, WaitPairHashFunction> &pairs) -> bool;
+
   void UnlockAll();
+  auto IsTxnAborted(txn_id_t txn_id) -> bool;
 
   /** Structure that holds lock requests for a given table oid */
   std::unordered_map<table_oid_t, std::shared_ptr<LockRequestQueue>> table_lock_map_;
@@ -333,11 +353,22 @@ class LockManager {
   /** Coordination */
   std::mutex row_lock_map_latch_;
 
+  std::unordered_map<txn_id_t, std::shared_ptr<LockRequestQueue>> wait_for_lock_map_;
+  std::mutex wait_for_map_latch_;
+
   std::atomic<bool> enable_cycle_detection_;
   std::thread *cycle_detection_thread_;
   /** Waits-for graph representation. */
+  //  struct WaitPairHashFunction {
+  //    auto operator()(const std::pair<txn_id_t, txn_id_t> &x) const -> size_t { return x.first ^ x.second; }
+  //  };
+
+  std::unordered_set<std::pair<txn_id_t, txn_id_t>, WaitPairHashFunction> wait_pairs_;
   std::unordered_map<txn_id_t, std::vector<txn_id_t>> waits_for_;
+  std::unordered_map<txn_id_t, Transaction *> txns_;
   std::mutex waits_for_latch_;
+
+  bool run_{true};
 };
 
 }  // namespace bustub

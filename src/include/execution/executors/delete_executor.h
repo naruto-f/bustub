@@ -65,5 +65,6 @@ class DeleteExecutor : public AbstractExecutor {
 
   std::vector<IndexInfo *> index_infos_;
   bool flag_{false};
+  Transaction *txn_;
 };
 }  // namespace bustub

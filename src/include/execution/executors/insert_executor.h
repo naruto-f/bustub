@@ -62,6 +62,7 @@ class InsertExecutor : public AbstractExecutor {
   TableInfo *table_info_;
   std::vector<IndexInfo *> index_infos_;
   bool flag_{false};
+  Transaction *txn_;
 };
 
 }  // namespace bustub
