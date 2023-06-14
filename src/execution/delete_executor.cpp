@@ -28,6 +28,13 @@ void DeleteExecutor::Init() {
   // throw NotImplementedException("DeleteExecutor is not implemented");
   child_executor_->Init();
   index_infos_ = exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
+
+  //  bool lock_success{true};
+  //  lock_success =
+  //      exec_ctx_->GetLockManager()->LockTable(txn_, LockManager::LockMode::INTENTION_EXCLUSIVE, plan_->table_oid_);
+  //  if (!lock_success) {
+  //    throw ExecutionException("Table lock field!");
+  //  }
 }
 
 auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
@@ -45,7 +52,7 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         key_attrs.push_back(table_info_->schema_.GetColIdx(col.GetName()));
       }
       index_info->index_->DeleteEntry(tuple->KeyFromTuple(table_info_->schema_, index_info->key_schema_, key_attrs),
-                                      *rid, nullptr);
+                                      *rid, txn_);
     }
     TableWriteRecord write_record{plan_->table_oid_, *rid,
                                   exec_ctx_->GetCatalog()->GetTable(plan_->table_oid_)->table_.get()};

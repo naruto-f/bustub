@@ -331,7 +331,8 @@ class LockManager {
 
   auto AreLocksCompatible(LockMode l1, LockMode l2) -> bool;
   auto CheckLocksCompatible(Transaction *txn, LockMode l1, LockMode l2) -> void;
-  auto IsCompatible(LockMode l1, std::unordered_map<txn_id_t, LockRequest *> &locked_reqs) -> bool;
+  auto IsLockModeCompatible(LockMode l1, LockMode l2) -> bool;
+  auto IsCompatible(LockMode l1, std::shared_ptr<LockRequestQueue> &req_queue, LockRequest *cur_req) -> bool;
   auto CanTxnTakeLock(Transaction *txn, LockMode lock_mode) -> bool;
   void GrantNewLocksIfPossible(LockRequestQueue *lock_request_queue);
   auto CanLockUpgrade(LockMode curr_lock_mode, LockMode requested_lock_mode) -> bool;

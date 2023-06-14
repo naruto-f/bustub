@@ -52,5 +52,6 @@ class SeqScanExecutor : public AbstractExecutor {
   const SeqScanPlanNode *plan_;
   TableIterator iter_;
   Transaction *txn_;
+  std::vector<RID> need_unlock_;
 };
 }  // namespace bustub

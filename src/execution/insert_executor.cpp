@@ -29,8 +29,15 @@ void InsertExecutor::Init() {
   child_executor_->Init();
   index_infos_ = exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
   bool lock_success{true};
-  lock_success =
-      exec_ctx_->GetLockManager()->LockTable(txn_, LockManager::LockMode::INTENTION_EXCLUSIVE, plan_->table_oid_);
+  try {
+    lock_success =
+        exec_ctx_->GetLockManager()->LockTable(txn_, LockManager::LockMode::INTENTION_EXCLUSIVE, plan_->table_oid_);
+  } catch (const TransactionAbortException &error) {
+    throw ExecutionException("Table lock field!");
+  }
+
+  //  lock_success =
+  //      exec_ctx_->GetLockManager()->LockTable(txn_, LockManager::LockMode::INTENTION_EXCLUSIVE, plan_->table_oid_);
   if (!lock_success) {
     throw ExecutionException("Table lock field!");
   }
@@ -44,7 +51,13 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
     meta.is_deleted_ = false;
     meta.delete_txn_id_ = INVALID_TXN_ID;
     meta.insert_txn_id_ = txn_->GetTransactionId();
-    auto new_rid = table_info_->table_->InsertTuple(meta, *tuple, exec_ctx_->GetLockManager(), txn_);
+    std::optional<RID> new_rid;
+    try {
+      new_rid = table_info_->table_->InsertTuple(meta, *tuple, exec_ctx_->GetLockManager(), txn_, plan_->table_oid_);
+    } catch (const TransactionAbortException &error) {
+      throw ExecutionException("Table lock field!");
+    }
+    // new_rid -> *rid
     TableWriteRecord write_record{plan_->table_oid_, new_rid.value(),
                                   exec_ctx_->GetCatalog()->GetTable(plan_->table_oid_)->table_.get()};
     write_record.wtype_ = WType::INSERT;
@@ -55,7 +68,7 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         key_attrs.push_back(table_info_->schema_.GetColIdx(col.GetName()));
       }
       index_info->index_->InsertEntry(tuple->KeyFromTuple(table_info_->schema_, index_info->key_schema_, key_attrs),
-                                      new_rid.value(), nullptr);
+                                      new_rid.value(), txn_);
     }
     ++count;
   }

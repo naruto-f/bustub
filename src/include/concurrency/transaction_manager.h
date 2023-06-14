@@ -104,7 +104,6 @@ class TransactionManager {
    */
   void ReleaseLocks(Transaction *txn) {
     /** Drop all row locks */
-    txn->LockTxn();
     std::unordered_map<table_oid_t, std::unordered_set<RID>> row_lock_set;
     for (const auto &s_row_lock_set : *txn->GetSharedRowLockSet()) {
       for (auto rid : s_row_lock_set.second) {
@@ -134,7 +133,6 @@ class TransactionManager {
     for (auto oid : *txn->GetSharedIntentionExclusiveTableLockSet()) {
       table_lock_set.emplace(oid);
     }
-    txn->UnlockTxn();
 
     for (const auto &locked_table_row_set : row_lock_set) {
       table_oid_t oid = locked_table_row_set.first;

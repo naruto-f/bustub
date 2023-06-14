@@ -44,17 +44,19 @@ void TransactionManager::Abort(Transaction *txn) {
     auto record = table_write_records->back();
     table_write_records->pop_back();
     auto write_type = record.wtype_;
+    // bool lock_success = lock_manager_->LockRow(txn, LockManager::LockMode::EXCLUSIVE, record.tid_, record.rid_);
+    // assert(lock_success);
     if (write_type == WType::INSERT) {
       TupleMeta meta;
       meta.is_deleted_ = true;
-      meta.delete_txn_id_ = txn_id;
-      meta.insert_txn_id_ = INVALID_TXN_ID;
+      meta.delete_txn_id_ = INVALID_TXN_ID;
+      meta.insert_txn_id_ = txn_id;
       record.table_heap_->UpdateTupleMeta(meta, record.rid_);
     } else if (write_type == WType::DELETE) {
       TupleMeta meta;
       meta.is_deleted_ = false;
-      meta.delete_txn_id_ = INVALID_TXN_ID;
-      meta.insert_txn_id_ = txn_id;
+      meta.delete_txn_id_ = txn_id;
+      meta.insert_txn_id_ = INVALID_TXN_ID;
       record.table_heap_->UpdateTupleMeta(meta, record.rid_);
 
       //      auto [tuple_meta, tuple] = record.table_heap_->GetTuple(record.rid_);
@@ -62,11 +64,12 @@ void TransactionManager::Abort(Transaction *txn) {
       //      tuple_meta.delete_txn_id_ = INVALID_TXN_ID;
       //      tuple_meta.insert_txn_id_ = txn_id;
       //
-      //      record.table_heap_->InsertTuple(tuple_meta, tuple, lock_manager_, txn);
+      //      record.table_heap_->InsertTuple(tuple_meta, tuple, lock_manager_, txn, record.tid_);
     } else {
     }
+    // lock_success = lock_manager_->UnlockRow(txn, record.tid_, record.rid_);
+    // assert(lock_success);
   }
-
   // txn->SetUnlock();
   // txn->UnlockTxn();
 
